@@ -808,7 +808,6 @@ with tab_reconocimientos:
     with col3:
         st.markdown("**Herramientas**")
         st.markdown("""
-        - Google Colab
         - DJI Phantom 4 Advanced
         - Matplotlib
         """)
