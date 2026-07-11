@@ -752,11 +752,11 @@ with tab_ayuda:
     with st.expander("El video procesado no se puede reproducir en la app, ¿qué hago?"):
         st.markdown("Descarga el video y reprodúcelo localmente con cualquier reproductor de video.")
 
-    with st.expander("Cuántos créditos consume el sistema?"):
-        st.markdown("El sistema usa inferencia local de Roboflow que consume 3,000 frames por credito. Para un video de 2 minutos a 60fps (aprox. 7,000 frames) se consumen alrededor de 2.5 creditos.")
+    with st.expander("¿Cuántos créditos consume el sistema?"):
+        st.markdown("El sistema usa inferencia local de Roboflow que consume 3,000 frames por crédito. Para un video de 2 minutos a 60fps (aprox. 7,000 frames) se consumen alrededor de 2.5 créditos.")
 
-    with st.expander("El sistema funciona con videos de baja calidad?"):
-        st.markdown("Sí, pero la precision mejora notablemente con videos de mayor resolución y grabados con luz natural, los videos a 1080p o 4K dan mejores resultados.")
+    with st.expander("¿El sistema funciona con videos de baja calidad?"):
+        st.markdown("Sí, pero la precisión mejora notablemente con videos de mayor resolución y grabados con luz natural, los videos a 1080p o 4K dan mejores resultados.")
 
 with tab_reconocimientos:
     st.title("Reconocimientos")
