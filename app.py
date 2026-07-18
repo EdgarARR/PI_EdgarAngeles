@@ -621,22 +621,6 @@ with tab_detector:
                 if out_writer[0]:
                     out_writer[0].release()
 
-            try:
-                pipeline = InferencePipeline.init(
-                    model_id=MODEL_ID,
-                    video_reference=video_path,
-                    on_prediction=render_predictions,
-                    api_key=API_KEY,
-                    confidence=confianza
-                )
-                pipeline.start()
-                pipeline.join()
-            except Exception as e:
-                st.error(f"Error: {e}")
-            finally:
-                if out_writer[0]:
-                    out_writer[0].release()
-
             progress_bar.progress(1.0)
             status_text.text("Procesamiento completado")
 
