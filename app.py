@@ -1,8 +1,9 @@
 import os
-os.environ["CORE_MODEL_SAM3_ENABLED"] = "False"
+os.environ["CORE_MODEL_SAM_ENABLED"] = "False"
 os.environ["CORE_MODEL_GAZE_ENABLED"] = "False"
 os.environ["CORE_MODEL_YOLO_WORLD_ENABLED"] = "False"
 os.environ["ONNXRUNTIME_EXECUTION_PROVIDERS"] = "CPUExecutionProvider"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 import streamlit as st
 import numpy as np
@@ -23,7 +24,6 @@ import sys
 import cv2
 import os
 import gc
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 TRADUCCION_CLASES = {
     "safe-pothole": "Bajo Riesgo",
@@ -506,102 +506,120 @@ with tab_detector:
             metric_medium = col_m2.empty()
             metric_risk = col_m3.empty()
 
-            def render_predictions(predictions, video_frame):
-                frame = video_frame.image.copy()
-                h, w = frame.shape[:2]
-
-                if out_writer[0] is None:
-                    out_writer[0] = cv2.VideoWriter(
-                        output_path,
-                        cv2.VideoWriter_fourcc(*"XVID"),
-                        fps, (w, h)
-                    )
-
-                progress = min(video_frame.frame_id / total_frames, 1.0)
-                progress_bar.progress(progress)
-                status_text.text(f"Frame {video_frame.frame_id}/{total_frames}")
-
-                segundo_actual = int(video_frame.frame_id / fps)
-                if segundo_actual not in detecciones_por_segundo:
-                    detecciones_por_segundo[segundo_actual] = {
-                        "safe-pothole": 0, "medium-pothole": 0, "risk-pothole": 0
-                    }
-
-                preds_frame = []
-                if predictions and "predictions" in predictions:
-                    preds_frame = predictions["predictions"]
-
-                boxes_frame = []
-                preds_filtradas = []
-                for pred in preds_frame:
-                    x_c = pred.get("x", 0)
-                    y_c = pred.get("y", 0)
-                    w_b = pred.get("width", 0)
-                    h_b = pred.get("height", 0)
-                    nueva_box = (x_c - w_b/2, y_c - h_b/2, x_c + w_b/2, y_c + h_b/2)
-                    duplicado_en_frame = False
-                    for box_existente, clase_existente in boxes_frame:
-                        if (pred.get("class") == clase_existente and
-                                calcular_iou(nueva_box, box_existente) > 0.3):
-                            duplicado_en_frame = True
-                            break
-                    if not duplicado_en_frame:
-                        boxes_frame.append((nueva_box, pred.get("class")))
-                        preds_filtradas.append((pred, nueva_box))
-
-                for pred, nueva_box in preds_filtradas:
-                    clase = pred.get("class", "")
-                    conf = pred.get("confidence", 0)
-                    color = COLORES.get(clase, (255, 255, 0))
-
-                    todas_las_boxes.append((nueva_box, clase))
-
-                    if clase in detecciones_por_segundo[segundo_actual]:
-                        detecciones_por_segundo[segundo_actual][clase] += 1
-
-                    if clase in baches_unicos:
-                        if not es_duplicado(nueva_box, baches_unicos[clase], iou_threshold):
-                            baches_unicos[clase].append(nueva_box)
-                            contadores[clase] += 1
-                            if clase == "risk-pothole" and len(hallazgos_risk) < 4:
-                                x1 = max(0, int(nueva_box[0]))
-                                y1 = max(0, int(nueva_box[1]))
-                                x2 = min(ancho, int(nueva_box[2]))
-                                y2 = min(alto, int(nueva_box[3]))
-                                crop = frame[y1:y2, x1:x2]
-                                if crop.size > 0:
-                                    crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                                    img_pil = PILImage.fromarray(crop_rgb)
-                                    img_pil = img_pil.resize((300, 200), PILImage.LANCZOS)
-                                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_img:
-                                        img_pil.save(tmp_img.name, format="JPEG", quality=85)
-                                        ruta_guardada = tmp_img.name
-                                    hallazgos_risk.append({
-                                        "ruta_imagen": ruta_guardada,
-                                        "frame": video_frame.frame_id,
-                                        "confianza": conf
-                                    })
-
-                    if "points" in pred:
-                        puntos = np.array(
-                            [[int(p["x"]), int(p["y"])] for p in pred["points"]],
-                            np.int32
+            try:
+                from inference import get_model
+                model = get_model(model_id=MODEL_ID, api_key=API_KEY)
+                cap_process = cv2.VideoCapture(video_path)
+                frame_id = 0
+                while cap_process.isOpened():
+                    ret, frame = cap_process.read()
+                    if not ret:
+                        break
+                        
+                    frame_id += 1
+                    h, w = frame.shape[:2]
+            
+                    if out_writer[0] is None:
+                        out_writer[0] = cv2.VideoWriter(
+                            output_path,
+                            cv2.VideoWriter_fourcc(*"XVID"),
+                            fps, (w, h)
                         )
-                        cv2.polylines(frame, [puntos], isClosed=True, color=color, thickness=3)
-                        x, y = puntos[0]
-                        clase_es = TRADUCCION_CLASES.get(clase, clase)
-                        label = f"{clase_es} {conf:.0%}"
-                        x = max(0, min(x, w - len(label) * 13))
-                        y = max(30, y)
-                        cv2.rectangle(frame, (x, y-30), (x + len(label)*13, y), color, -1)
-                        cv2.putText(frame, label, (x, y-8),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
 
-                out_writer[0].write(frame)
-                metric_safe.metric("Safe", contadores["safe-pothole"])
-                metric_medium.metric("Medium", contadores["medium-pothole"])
-                metric_risk.metric("Risk", contadores["risk-pothole"])
-                gc.collect()
+                    result = model.infer(frame, confidence=confianza)
+                    predictions = result[0].dict()
+                    progress = min(frame_id / total_frames, 1.0)
+                    progress_bar.progress(progress)
+                    status_text.text(f"Frame {frame_id}/{total_frames}")
+                    segundo_actual = int(frame_id / fps)
+                    if segundo_actual not in detecciones_por_segundo:
+                        detecciones_por_segundo[segundo_actual] = {
+                            "safe-pothole": 0, "medium-pothole": 0, "risk-pothole": 0
+                        }
+            
+                    preds_frame = []
+                    if predictions and "predictions" in predictions:
+                        preds_frame = predictions["predictions"]
+            
+                    boxes_frame = []
+                    preds_filtradas = []
+                    for pred in preds_frame:
+                        x_c = pred.get("x", 0)
+                        y_c = pred.get("y", 0)
+                        w_b = pred.get("width", 0)
+                        h_b = pred.get("height", 0)
+                        nueva_box = (x_c - w_b/2, y_c - h_b/2, x_c + w_b/2, y_c + h_b/2)
+                        duplicado_en_frame = False
+                        for box_existente, clase_existente in boxes_frame:
+                            if (pred.get("class") == clase_existente and
+                                    calcular_iou(nueva_box, box_existente) > 0.3):
+                                duplicado_en_frame = True
+                                break
+                        if not duplicado_en_frame:
+                            boxes_frame.append((nueva_box, pred.get("class")))
+                            preds_filtradas.append((pred, nueva_box))
+            
+                    for pred, nueva_box in preds_filtradas:
+                        clase = pred.get("class", "")
+                        conf = pred.get("confidence", 0)
+                        color = COLORES.get(clase, (255, 255, 0))
+            
+                        todas_las_boxes.append((nueva_box, clase))
+            
+                        if clase in detecciones_por_segundo[segundo_actual]:
+                            detecciones_por_segundo[segundo_actual][clase] += 1
+            
+                        if clase in baches_unicos:
+                            if not es_duplicado(nueva_box, baches_unicos[clase], iou_threshold):
+                                baches_unicos[clase].append(nueva_box)
+                                contadores[clase] += 1
+                                if clase == "risk-pothole" and len(hallazgos_risk) < 4:
+                                    x1 = max(0, int(nueva_box[0]))
+                                    y1 = max(0, int(nueva_box[1]))
+                                    x2 = min(ancho, int(nueva_box[2]))
+                                    y2 = min(alto, int(nueva_box[3]))
+                                    crop = frame[y1:y2, x1:x2]
+                                    if crop.size > 0:
+                                        crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                                        img_pil = PILImage.fromarray(crop_rgb)
+                                        img_pil = img_pil.resize((300, 200), PILImage.LANCZOS)
+                                        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_img:
+                                            img_pil.save(tmp_img.name, format="JPEG", quality=85)
+                                            ruta_guardada = tmp_img.name
+                                        hallazgos_risk.append({
+                                            "ruta_imagen": ruta_guardada,
+                                            "frame": frame_id,
+                                            "confianza": conf
+                                        })
+            
+                        if "points" in pred:
+                            puntos = np.array(
+                                [[int(p["x"]), int(p["y"])] for p in pred["points"]],
+                                np.int32
+                            )
+                            cv2.polylines(frame, [puntos], isClosed=True, color=color, thickness=3)
+                            x, y = puntos[0]
+                            clase_es = TRADUCCION_CLASES.get(clase, clase)
+                            label = f"{clase_es} {conf:.0%}"
+                            x = max(0, min(x, w - len(label) * 13))
+                            y = max(30, y)
+                            cv2.rectangle(frame, (x, y-30), (x + len(label)*13, y), color, -1)
+                            cv2.putText(frame, label, (x, y-8),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
+            
+                    out_writer[0].write(frame)
+                    metric_safe.metric("Safe", contadores["safe-pothole"])
+                    metric_medium.metric("Medium", contadores["medium-pothole"])
+                    metric_risk.metric("Risk", contadores["risk-pothole"])
+                    gc.collect()
+            
+                cap_process.release()
+            
+            except Exception as e:
+                st.error(f"Error en el procesamiento: {e}")
+            finally:
+                if out_writer[0]:
+                    out_writer[0].release()
 
             try:
                 pipeline = InferencePipeline.init(
