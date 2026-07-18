@@ -1,5 +1,5 @@
 streamlit==1.56.0
-inference==1.2.2
+inference-sdk
 opencv-python-headless
 numpy==2.3.5
 pandas==2.3.3
