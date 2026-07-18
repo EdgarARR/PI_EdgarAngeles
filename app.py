@@ -527,7 +527,7 @@ with tab_detector:
                         )
 
                     result = model.infer(frame, confidence=confianza)
-                    predictions = result[0].dict()
+                    predictions = result[0].model_dump(by_alias=True)
                     progress = min(frame_id / total_frames, 1.0)
                     progress_bar.progress(progress)
                     status_text.text(f"Frame {frame_id}/{total_frames}")
