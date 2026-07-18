@@ -22,6 +22,7 @@ import subprocess
 import sys
 import cv2
 import os
+import gc
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 TRADUCCION_CLASES = {
