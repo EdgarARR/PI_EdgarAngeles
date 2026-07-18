@@ -624,19 +624,36 @@ with tab_detector:
             progress_bar.progress(1.0)
             status_text.text("Procesamiento completado")
 
-            with st.spinner("Convirtiendo video..."):
-                try:
-                    import imageio
-                    output_h264 = output_path.replace(".avi", "_h264.mp4")
-                    reader = imageio.get_reader(output_path)
-                    fps_vid = reader.get_meta_data()["fps"]
-                    writer = imageio.get_writer(output_h264, fps=fps_vid, codec="libx264")
-                    for frame in reader:
-                        writer.append_data(frame)
-                    writer.close()
-                    reader.close()
+            # Liberar el modelo y forzar recolección de basura ANTES de convertir,
+            # para dejar el máximo de RAM disponible al subproceso de ffmpeg.
+            try:
+                del model
+            except NameError:
+                pass
+            gc.collect()
 
-                    video_path_final = output_h264
+            with st.spinner("Convirtiendo video..."):
+                output_h264 = output_path.replace(".avi", "_h264.mp4")
+                try:
+                    resultado = subprocess.run(
+                        [
+                            "ffmpeg", "-y",
+                            "-i", output_path,
+                            "-vcodec", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "veryfast",
+                            "-movflags", "+faststart",
+                            output_h264,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=600,
+                    )
+                    if resultado.returncode == 0:
+                        video_path_final = output_h264
+                    else:
+                        st.warning(f"No se pudo convertir: {resultado.stderr[-500:]}")
+                        video_path_final = output_path
                 except Exception as e:
                     st.warning(f"No se pudo convertir: {e}")
                     video_path_final = output_path
