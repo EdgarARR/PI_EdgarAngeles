@@ -25,7 +25,7 @@ import cv2
 TRADUCCION_CLASES = {
     "safe-pothole": "Bajo Riesgo",
     "medium-pothole": "Riesgo Medio",
-    "risk-pothole": "Alto Riesgo"
+    "risk-pothole": "Riesgo Alto"
 }
 
 st.set_page_config(
@@ -683,7 +683,7 @@ with tab_ayuda:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("### Safe")
+        st.markdown("### Bajo Riesgo")
         st.markdown("""
         **Color:** Rojo
 
@@ -691,7 +691,7 @@ with tab_ayuda:
         un peligro inmediato para los usuarios de la vía.
         """)
     with col2:
-        st.markdown("### Medium")
+        st.markdown("### Riesgo medio")
         st.markdown("""
         **Color:** Morado
 
@@ -699,7 +699,7 @@ with tab_ayuda:
         para evitar que se conviertan en baches de alto riesgo.
         """)
     with col3:
-        st.markdown("### Risk")
+        st.markdown("### Alto riesgo")
         st.markdown("""
         **Color:** Verde
 
