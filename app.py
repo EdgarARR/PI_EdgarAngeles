@@ -305,10 +305,7 @@ def generar_pdf(contadores, duracion, total_frames, fps,
         fila_y = pdf.get_y()
         col_idx = 0
         for i, hallazgo in enumerate(hallazgos_risk[:12]):
-            img_buf = io.BytesIO(hallazgo["imagen_bytes"])
-            nombre_crop = buf_a_archivo(img_buf)
-            pdf.image(nombre_crop, x=col_x[col_idx], y=fila_y, w=60)
-            os.remove(nombre_crop)
+            pdf.image(hallazgo["ruta_imagen"], x=col_x[col_idx], y=fila_y, w=60)
             pdf.set_xy(col_x[col_idx], fila_y + 42)
             pdf.set_font("Arial", "", 8)
             pdf.set_text_color(80, 80, 80)
@@ -412,7 +409,8 @@ def mostrar_resultados():
             cols = st.columns(items_por_fila)
             for col_idx, hallazgo in enumerate(fila):
                 with cols[col_idx]:
-                    img_b64 = base64.b64encode(hallazgo["imagen_bytes"]).decode()
+                    with open(hallazgo["ruta_imagen"], "rb") as img_file:
+                        img_b64 = base64.b64encode(img_file.read()).decode()
                     st.markdown(
                         f'''
                         <div style="text-align:center;">
@@ -494,7 +492,7 @@ with tab_detector:
             todas_las_boxes = []
             detecciones_por_segundo = {}
 
-            output_path = tempfile.mktemp(suffix="_resultado.mp4")
+            output_path = tempfile.mktemp(suffix="_resultado.avi")
             out_writer = [None]
 
             st.markdown("---")
@@ -514,7 +512,7 @@ with tab_detector:
                 if out_writer[0] is None:
                     out_writer[0] = cv2.VideoWriter(
                         output_path,
-                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        cv2.VideoWriter_fourcc(*"XVID"),
                         fps, (w, h)
                     )
 
@@ -564,24 +562,24 @@ with tab_detector:
                         if not es_duplicado(nueva_box, baches_unicos[clase], iou_threshold):
                             baches_unicos[clase].append(nueva_box)
                             contadores[clase] += 1
-                            if clase == "risk-pothole" and len(hallazgos_risk) < 8:
-                              x1 = max(0, int(nueva_box[0]))
-                              y1 = max(0, int(nueva_box[1]))
-                              x2 = min(ancho, int(nueva_box[2]))
-                              y2 = min(alto, int(nueva_box[3]))
-                              crop = frame[y1:y2, x1:x2]
-                              if crop.size > 0:
-                                  crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                                  img_pil = PILImage.fromarray(crop_rgb)
-                                  img_pil = img_pil.resize((300, 200), PILImage.LANCZOS)
-                                  buf = io.BytesIO()
-                                  img_pil.save(buf, format="PNG")
-                                  buf.seek(0)
-                                  hallazgos_risk.append({
-                                      "imagen_bytes": buf.getvalue(),
-                                      "frame": video_frame.frame_id,
-                                      "confianza": conf
-                                  })
+                            if clase == "risk-pothole" and len(hallazgos_risk) < 4:
+                                x1 = max(0, int(nueva_box[0]))
+                                y1 = max(0, int(nueva_box[1]))
+                                x2 = min(ancho, int(nueva_box[2]))
+                                y2 = min(alto, int(nueva_box[3]))
+                                crop = frame[y1:y2, x1:x2]
+                                if crop.size > 0:
+                                    crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                                    img_pil = PILImage.fromarray(crop_rgb)
+                                    img_pil = img_pil.resize((300, 200), PILImage.LANCZOS)
+                                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_img:
+                                        img_pil.save(tmp_img.name, format="JPEG", quality=85)
+                                        ruta_guardada = tmp_img.name
+                                    hallazgos_risk.append({
+                                        "ruta_imagen": ruta_guardada,
+                                        "frame": video_frame.frame_id,
+                                        "confianza": conf
+                                    })
 
                     if "points" in pred:
                         puntos = np.array(
@@ -626,7 +624,7 @@ with tab_detector:
             with st.spinner("Convirtiendo video..."):
                 try:
                     import imageio
-                    output_h264 = output_path.replace(".mp4", "_h264.mp4")
+                    output_h264 = output_path.replace(".avi", "_h264.mp4")
                     reader = imageio.get_reader(output_path)
                     fps_vid = reader.get_meta_data()["fps"]
                     writer = imageio.get_writer(output_h264, fps=fps_vid, codec="libx264")
