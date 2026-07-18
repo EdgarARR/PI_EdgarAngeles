@@ -632,9 +632,11 @@ with tab_detector:
                         [
                             ffmpeg_bin, "-y",
                             "-i", output_path,
+                            "-vf", "scale='min(1280,iw)':-2",
                             "-vcodec", "libx264",
                             "-pix_fmt", "yuv420p",
-                            "-preset", "veryfast",
+                            "-preset", "ultrafast",
+                            "-crf", "28",
                             "-movflags", "+faststart",
                             output_h264,
                         ],
