@@ -22,6 +22,12 @@ import subprocess
 import sys
 import cv2
 
+TRADUCCION_CLASES = {
+    "safe-pothole": "Bajo Riesgo",
+    "medium-pothole": "Riesgo Medio",
+    "risk-pothole": "Alto Riesgo"
+}
+
 st.set_page_config(
     page_title="Detector de Baches",
     layout="wide",
@@ -78,8 +84,8 @@ def generar_pie_chart(contadores):
     fig, ax = plt.subplots(figsize=(6, 4), facecolor="white")
     ax.set_facecolor("white")
     valores = list(contadores.values())
-    etiquetas = list(contadores.keys())
-    colores = [COLORES_MPL[k] for k in etiquetas]
+    etiquetas = [TRADUCCION_CLASES[k] for k in contadores.keys()]
+    colores = [COLORES_MPL[k] for k in contadores.keys()]
     wedges, texts, autotexts = ax.pie(
         valores, labels=etiquetas, colors=colores,
         autopct="%1.1f%%", startangle=90,
@@ -101,7 +107,8 @@ def generar_barras(contadores):
     clases = list(contadores.keys())
     valores = list(contadores.values())
     colores = [COLORES_MPL[k] for k in clases]
-    bars = ax.barh(clases, valores, color=colores, edgecolor="black", linewidth=0.5)
+    clases_es = [TRADUCCION_CLASES[k] for k in clases]
+    bars = ax.barh(clases_es, valores, color=colores, edgecolor="black", linewidth=0.5)
     for bar, val in zip(bars, valores):
         ax.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height()/2,
                 str(val), va="center", color="black", fontsize=11, fontweight="bold")
@@ -125,7 +132,7 @@ def generar_linea_tiempo(detecciones_por_segundo, fps):
     segundos = sorted(detecciones_por_segundo.keys())
     for clase, color in COLORES_MPL.items():
         valores = [detecciones_por_segundo.get(s, {}).get(clase, 0) for s in segundos]
-        ax.plot(segundos, valores, color=color, linewidth=2, label=clase)
+        ax.plot(segundos, valores, color=color, linewidth=2, label=TRADUCCION_CLASES[clase])
         ax.fill_between(segundos, valores, alpha=0.15, color=color)
     ax.set_xlabel("Tiempo (segundos)", color="black")
     ax.set_ylabel("Detecciones", color="black")
@@ -246,7 +253,8 @@ def generar_pdf(contadores, duracion, total_frames, fps,
         pct = (cantidad / total * 100) if total > 0 else 0
         r, g, b = colores_texto[clase]
         pdf.set_text_color(r, g, b)
-        pdf.cell(0, 10, f"  {clase}: {cantidad} ({pct:.1f}%)", ln=True)
+        nombre_traducido = TRADUCCION_CLASES[clase]
+        pdf.cell(0, 10, f"  {nombre_traducido}: {cantidad} ({pct:.1f}%)", ln=True)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"  Total: {total} baches unicos detectados", ln=True)
@@ -366,13 +374,13 @@ def mostrar_resultados():
     _, col1, col2, col3, col4, _ = st.columns([0.5, 1, 1, 1, 1, 0.5])
     total_baches = sum(contadores.values())
     col1.metric("Total baches", total_baches)
-    col2.metric("Safe", contadores["safe-pothole"])
-    col3.metric("Medium", contadores["medium-pothole"])
-    col4.metric("Risk", contadores["risk-pothole"])
+    col2.metric("Bajo Riesgo", contadores["safe-pothole"])
+    col3.metric("Riesgo Medio", contadores["medium-pothole"])
+    col4.metric("Alto Riesgo", contadores["risk-pothole"])
 
     st.markdown("### Distribución de baches")
     df_contadores = pd.DataFrame({
-        "Tipo": list(contadores.keys()),
+        "Tipo": [TRADUCCION_CLASES[k] for k in contadores.keys()],
         "Cantidad": list(contadores.values())
     })
     st.bar_chart(df_contadores.set_index("Tipo"))
@@ -580,7 +588,8 @@ with tab_detector:
                         )
                         cv2.polylines(frame, [puntos], isClosed=True, color=color, thickness=3)
                         x, y = puntos[0]
-                        label = f"{clase} {conf:.0%}"
+                        clase_es = TRADUCCION_CLASES.get(clase, clase)
+                        label = f"{clase_es} {conf:.0%}"
                         x = max(0, min(x, w - len(label) * 13))
                         y = max(30, y)
                         cv2.rectangle(frame, (x, y-30), (x + len(label)*13, y), color, -1)
