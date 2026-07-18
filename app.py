@@ -635,9 +635,11 @@ with tab_detector:
             with st.spinner("Convirtiendo video..."):
                 output_h264 = output_path.replace(".avi", "_h264.mp4")
                 try:
+                    import imageio_ffmpeg
+                    ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
                     resultado = subprocess.run(
                         [
-                            "ffmpeg", "-y",
+                            ffmpeg_bin, "-y",
                             "-i", output_path,
                             "-vcodec", "libx264",
                             "-pix_fmt", "yuv420p",
