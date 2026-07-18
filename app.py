@@ -21,6 +21,8 @@ from inference.core.interfaces.camera.entities import VideoFrame
 import subprocess
 import sys
 import cv2
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 TRADUCCION_CLASES = {
     "safe-pothole": "Bajo Riesgo",
@@ -600,6 +602,7 @@ with tab_detector:
                 metric_safe.metric("Safe", contadores["safe-pothole"])
                 metric_medium.metric("Medium", contadores["medium-pothole"])
                 metric_risk.metric("Risk", contadores["risk-pothole"])
+                gc.collect()
 
             try:
                 pipeline = InferencePipeline.init(
