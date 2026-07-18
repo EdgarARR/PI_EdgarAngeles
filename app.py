@@ -1,9 +1,4 @@
 import os
-os.environ["CORE_MODEL_SAM_ENABLED"] = "False"
-os.environ["CORE_MODEL_GAZE_ENABLED"] = "False"
-os.environ["CORE_MODEL_YOLO_WORLD_ENABLED"] = "False"
-os.environ["ONNXRUNTIME_EXECUTION_PROVIDERS"] = "CPUExecutionProvider"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 import streamlit as st
 import numpy as np
@@ -17,8 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 from PIL import Image as PILImage
-from inference import InferencePipeline
-from inference.core.interfaces.camera.entities import VideoFrame
+from inference_sdk import InferenceHTTPClient
 import subprocess
 import sys
 import cv2
@@ -507,8 +501,10 @@ with tab_detector:
             metric_risk = col_m3.empty()
 
             try:
-                from inference import get_model
-                model = get_model(model_id=MODEL_ID, api_key=API_KEY)
+                client = InferenceHTTPClient(
+                    api_url="https://serverless.roboflow.com",
+                    api_key=API_KEY,
+                )
                 cap_process = cv2.VideoCapture(video_path)
                 frame_id = 0
                 while cap_process.isOpened():
@@ -526,8 +522,7 @@ with tab_detector:
                             fps, (w, h)
                         )
 
-                    result = model.infer(frame, confidence=confianza)
-                    predictions = result[0].model_dump(by_alias=True)
+                    predictions = client.infer(frame, model_id=MODEL_ID)
                     progress = min(frame_id / total_frames, 1.0)
                     progress_bar.progress(progress)
                     status_text.text(f"Frame {frame_id}/{total_frames}")
@@ -539,7 +534,10 @@ with tab_detector:
             
                     preds_frame = []
                     if predictions and "predictions" in predictions:
-                        preds_frame = predictions["predictions"]
+                        preds_frame = [
+                            p for p in predictions["predictions"]
+                            if p.get("confidence", 0) >= confianza
+                        ]
             
                     boxes_frame = []
                     preds_filtradas = []
@@ -623,13 +621,6 @@ with tab_detector:
 
             progress_bar.progress(1.0)
             status_text.text("Procesamiento completado")
-
-            # Liberar el modelo y forzar recolección de basura ANTES de convertir,
-            # para dejar el máximo de RAM disponible al subproceso de ffmpeg.
-            try:
-                del model
-            except NameError:
-                pass
             gc.collect()
 
             with st.spinner("Convirtiendo video..."):
